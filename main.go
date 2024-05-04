@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"time" // Importing time package
 )
 
 const GoFileExtension = ".go"
@@ -107,12 +108,18 @@ func main() {
 
 	printProjectInfo(path)
 
+	start := time.Now()
+
 	totalLineCount, totalFunctionCount, err := countLinesAndFunctions(path)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
+
+	elapsed := time.Since(start)
+
 	fmt.Printf("-------------\n")
 	fmt.Printf("Total lines in.go files: %d\n", totalLineCount)
 	fmt.Printf("Total functions in.go files: %d\n", totalFunctionCount)
+	fmt.Printf("Time taken: %s\n", elapsed) // Print the elapsed time
 }
