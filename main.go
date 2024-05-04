@@ -121,5 +121,5 @@ func main() {
 	fmt.Printf("-------------\n")
 	fmt.Printf("Total lines in.go files: %d\n", totalLineCount)
 	fmt.Printf("Total functions in.go files: %d\n", totalFunctionCount)
-	fmt.Printf("Time taken: %s\n", elapsed) // Print the elapsed time
+	fmt.Printf("Time taken: %s\n", elapsed)
 }
