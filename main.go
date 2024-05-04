@@ -8,61 +8,61 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"time" // Importing time package
+	"time"
 )
 
 const GoFileExtension = ".go"
 
-func countLinesInFile(file *os.File) (int, error) {
-	scanner := bufio.NewScanner(file)
-	var lineCount int
-	for scanner.Scan() {
-		lineCount++
-	}
-	if err := scanner.Err(); err != nil {
-		return 0, err
-	}
-	return lineCount, nil
+type Analyzer struct {
+	TotalLineCount     int
+	TotalFunctionCount int
 }
 
-func countFunctionsInFile(path string) (int, error) {
+func (a *Analyzer) countLinesInFile(file *os.File) error {
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		a.TotalLineCount++
+	}
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *Analyzer) countFunctionsInFile(path string) error {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	functionCount := 0
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch n.(type) {
 		case *ast.FuncDecl:
-			functionCount++
+			a.TotalFunctionCount++
 		}
 		return true
 	})
-	return functionCount, nil
+	return nil
 }
 
-func processFile(path string) (int, int, error) {
+func (a *Analyzer) processFile(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to open file %s: %w", path, err)
+		return fmt.Errorf("failed to open file %s: %w", path, err)
 	}
 	defer file.Close()
 
-	lineCount, err := countLinesInFile(file)
-	if err != nil {
-		return 0, 0, err
+	if err := a.countLinesInFile(file); err != nil {
+		return err
 	}
-	functionCount, err := countFunctionsInFile(path)
-	if err != nil {
-		return 0, 0, err
+	if err := a.countFunctionsInFile(path); err != nil {
+		return err
 	}
 
-	return lineCount, functionCount, nil
+	return nil
 }
 
-func countLinesAndFunctions(path string) (int, int, error) {
-	var totalLineCount, totalFunctionCount int
+func (a *Analyzer) countLinesAndFunctions(path string) error {
 	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -71,20 +71,17 @@ func countLinesAndFunctions(path string) (int, int, error) {
 			return nil
 		}
 		if filepath.Ext(path) == GoFileExtension {
-			lineCount, functionCount, processFileError := processFile(path)
-			if processFileError != nil {
-				return processFileError
+			if err := a.processFile(path); err != nil {
+				return err
 			}
-			totalLineCount += lineCount
-			totalFunctionCount += functionCount
-			fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), lineCount, functionCount)
+			fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), a.TotalLineCount, a.TotalFunctionCount)
 		}
 		return nil
 	})
-	return totalLineCount, totalFunctionCount, err
+	return err
 }
 
-func printProjectInfo(path string) {
+func (a *Analyzer) printProjectInfo(path string) {
 	currentDir, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("Error getting current directory: %v\n", err)
@@ -99,27 +96,31 @@ func printProjectInfo(path string) {
 	fmt.Printf("-------------\n")
 }
 
+func (a *Analyzer) printAnalysisResults(elapsed time.Duration) {
+	fmt.Printf("-------------\n")
+	fmt.Printf("Total lines in.go files: %d\n", a.TotalLineCount)
+	fmt.Printf("Total functions in.go files: %d\n", a.TotalFunctionCount)
+	fmt.Printf("Time taken: %s\n", elapsed)
+}
+
 func main() {
+	start := time.Now()
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run main.go <path>")
 		return
 	}
 	path := os.Args[1]
 
-	printProjectInfo(path)
+	analyzer := &Analyzer{}
 
-	start := time.Now()
+	analyzer.printProjectInfo(path)
 
-	totalLineCount, totalFunctionCount, err := countLinesAndFunctions(path)
-	if err != nil {
+	if err := analyzer.countLinesAndFunctions(path); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
 	elapsed := time.Since(start)
 
-	fmt.Printf("-------------\n")
-	fmt.Printf("Total lines in.go files: %d\n", totalLineCount)
-	fmt.Printf("Total functions in.go files: %d\n", totalFunctionCount)
-	fmt.Printf("Time taken: %s\n", elapsed)
+	analyzer.printAnalysisResults(elapsed)
 }
