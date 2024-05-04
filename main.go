@@ -12,36 +12,23 @@ import (
 
 const GoFileExtension = ".go"
 
-func processFile(path string) (int, int, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to open file %s: %w", path, err)
-	}
-	defer file.Close()
-
-	lineCount := countLinesInFile(file)
-	functionCount := countFunctionsInFile(path)
-
-	return lineCount, functionCount, nil
-}
-
-func countLinesInFile(file *os.File) int {
+func countLinesInFile(file *os.File) (int, error) {
 	scanner := bufio.NewScanner(file)
 	var lineCount int
 	for scanner.Scan() {
 		lineCount++
 	}
 	if err := scanner.Err(); err != nil {
-		return 0
+		return 0, err
 	}
-	return lineCount
+	return lineCount, nil
 }
 
-func countFunctionsInFile(path string) int {
+func countFunctionsInFile(path string) (int, error) {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	functionCount := 0
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -51,7 +38,26 @@ func countFunctionsInFile(path string) int {
 		}
 		return true
 	})
-	return functionCount
+	return functionCount, nil
+}
+
+func processFile(path string) (int, int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to open file %s: %w", path, err)
+	}
+	defer file.Close()
+
+	lineCount, err := countLinesInFile(file)
+	if err != nil {
+		return 0, 0, err
+	}
+	functionCount, err := countFunctionsInFile(path)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return lineCount, functionCount, nil
 }
 
 func countLinesAndFunctions(path string) (int, int, error) {
