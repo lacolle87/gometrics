@@ -83,13 +83,7 @@ func countLinesAndFunctions(path string) (int, int, error) {
 	return totalLineCount, totalFunctionCount, err
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <path>")
-		return
-	}
-	path := os.Args[1]
-
+func printProjectInfo(path string) {
 	currentDir, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("Error getting current directory: %v\n", err)
@@ -102,6 +96,16 @@ func main() {
 	}
 	fmt.Println("Project Name:", projectName)
 	fmt.Printf("-------------\n")
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: go run main.go <path>")
+		return
+	}
+	path := os.Args[1]
+
+	printProjectInfo(path)
 
 	totalLineCount, totalFunctionCount, err := countLinesAndFunctions(path)
 	if err != nil {
