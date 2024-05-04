@@ -62,8 +62,8 @@ func countLinesAndFunctions(path string) (int, int, error) {
 			return nil
 		}
 		if filepath.Ext(path) == ".go" {
-			lineCount, functionCount, err := processFile(path)
-			if err != nil {
+			lineCount, functionCount, processFileerr := processFile(path)
+			if processFileerr != nil {
 				return err
 			}
 			totalLineCount += lineCount
@@ -82,8 +82,18 @@ func main() {
 	}
 	path := os.Args[1]
 
+	currentDir, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting current directory: %v\n", err)
+		return
+	}
+
 	projectName := filepath.Base(path)
+	if path == "." {
+		projectName = filepath.Base(currentDir)
+	}
 	fmt.Println("Project Name:", projectName)
+	fmt.Printf("-------------\n")
 
 	totalLineCount, totalFunctionCount, err := countLinesAndFunctions(path)
 	if err != nil {
@@ -93,5 +103,4 @@ func main() {
 	fmt.Printf("-------------\n")
 	fmt.Printf("Total lines in.go files: %d\n", totalLineCount)
 	fmt.Printf("Total functions in.go files: %d\n", totalFunctionCount)
-	fmt.Printf("-------------\n")
 }
