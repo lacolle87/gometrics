@@ -10,10 +10,12 @@ import (
 	"path/filepath"
 )
 
+const GoFileExtension = ".go"
+
 func processFile(path string) (int, int, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to open file %s: %w", path, err)
 	}
 	defer file.Close()
 
@@ -61,10 +63,10 @@ func countLinesAndFunctions(path string) (int, int, error) {
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) == ".go" {
-			lineCount, functionCount, processFileerr := processFile(path)
-			if processFileerr != nil {
-				return err
+		if filepath.Ext(path) == GoFileExtension {
+			lineCount, functionCount, processFileError := processFile(path)
+			if processFileError != nil {
+				return processFileError
 			}
 			totalLineCount += lineCount
 			totalFunctionCount += functionCount
