@@ -15,7 +15,7 @@ import (
 
 const (
 	goFileExtension = ".go"
-	WorkerPoolSize  = 4
+	WorkerPoolSize  = 8
 )
 
 type Analyzer struct {
@@ -76,13 +76,11 @@ func (a *Analyzer) countFunctionsInFile(path string, cache *c.ParsedFileCache) (
 
 func countFunctionsInAST(node *ast.File) uint {
 	var funcCount uint
-	ast.Inspect(node, func(n ast.Node) bool {
-		_, ok := n.(*ast.FuncDecl)
-		if ok {
+	for _, decl := range node.Decls {
+		if fdecl, ok := decl.(*ast.FuncDecl); ok && fdecl.Name != nil {
 			funcCount++
 		}
-		return true
-	})
+	}
 	return funcCount
 }
 
