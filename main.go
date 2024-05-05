@@ -31,7 +31,11 @@ func (a *Analyzer) countLinesInFile(path string) (uint, error) {
 	defer file.Close()
 
 	var lineCount uint
+	buf := make([]byte, 4096)
+
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(buf, 0)
+
 	for scanner.Scan() {
 		lineCount++
 	}
@@ -48,13 +52,26 @@ func (a *Analyzer) countFunctionsInFile(path string, cache *c.ParsedFileCache) (
 	}
 
 	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, path, nil, 0)
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	node, err := parser.ParseFile(fset, path, src, parser.DeclarationErrors)
 	if err != nil {
 		return 0, err
 	}
 	cache.Set(path, node)
 
-	return countFunctionsInAST(node), nil
+	var funcCount uint
+	for _, decl := range node.Decls {
+		if fdecl, ok := decl.(*ast.FuncDecl); ok {
+			if fdecl.Name != nil {
+				funcCount++
+			}
+		}
+	}
+	return funcCount, nil
 }
 
 func countFunctionsInAST(node *ast.File) uint {
