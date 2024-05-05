@@ -1,3 +1,3 @@
-module files_leson
+module goMetrics
 
 go 1.22

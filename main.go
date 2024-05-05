@@ -6,8 +6,10 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	c "goMetrics/cache"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
@@ -37,13 +39,22 @@ func (a *Analyzer) countLinesInFile(path string) (uint, error) {
 	return lineCount, nil
 }
 
-func (a *Analyzer) countFunctionsInFile(path string) (uint, error) {
+func (a *Analyzer) countFunctionsInFile(path string, cache *c.ParsedFileCache) (uint, error) {
+	if file, ok := cache.Get(path); ok {
+		return countFunctionsInAST(file), nil
+	}
+
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, nil, 0)
 	if err != nil {
 		return 0, err
 	}
+	cache.Set(path, node)
 
+	return countFunctionsInAST(node), nil
+}
+
+func countFunctionsInAST(node *ast.File) uint {
 	var funcCount uint
 	ast.Inspect(node, func(n ast.Node) bool {
 		_, ok := n.(*ast.FuncDecl)
@@ -52,30 +63,39 @@ func (a *Analyzer) countFunctionsInFile(path string) (uint, error) {
 		}
 		return true
 	})
-
-	return funcCount, nil
+	return funcCount
 }
 
-func (a *Analyzer) analyzeFile(path string) error {
+func (a *Analyzer) analyzeFile(path string, cache *c.ParsedFileCache) error {
 	lineCount, err := a.countLinesInFile(path)
 	if err != nil {
 		return err
 	}
 
-	funcCount, err := a.countFunctionsInFile(path)
+	funcCount, err := a.countFunctionsInFile(path, cache)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), lineCount, funcCount)
-
-	a.TotalLineCount += lineCount
-	a.TotalFunctionCount += funcCount
+	a.printFileAnalysis(path, lineCount, funcCount)
+	a.updateTotals(lineCount, funcCount)
 
 	return nil
 }
 
-func (a *Analyzer) analyzeDirectory(dirPath string) error {
+func (a *Analyzer) printFileAnalysis(path string, lineCount uint, funcCount uint) {
+	fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), lineCount, funcCount)
+}
+
+func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
+	a.TotalLineCount += lineCount
+	a.TotalFunctionCount += funcCount
+}
+
+func (a *Analyzer) analyzeDirectoryParallel(dirPath string, cache *c.ParsedFileCache) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -84,13 +104,30 @@ func (a *Analyzer) analyzeDirectory(dirPath string) error {
 			return nil
 		}
 		if filepath.Ext(path) == goFileExtension {
-			if analyzeErr := a.analyzeFile(path); err != nil {
-				return analyzeErr
-			}
+			wg.Add(1)
+			go func(path string) {
+				defer wg.Done()
+				if err = a.analyzeFile(path, cache); err != nil {
+					errChan <- err
+				}
+			}(path)
 		}
 		return nil
 	})
-	return err
+	if err != nil {
+		return err
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	for err = range errChan {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (a *Analyzer) printProjectInfo(path string) {
@@ -124,10 +161,11 @@ func main() {
 	path := os.Args[1]
 
 	analyzer := &Analyzer{}
+	cache := c.NewParsedFileCache()
 
 	analyzer.printProjectInfo(path)
 
-	if err := analyzer.analyzeDirectory(path); err != nil {
+	if err := analyzer.analyzeDirectoryParallel(path, cache); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
