@@ -24,7 +24,7 @@ type Analyzer struct {
 }
 
 func (a *Analyzer) countLinesInFile(path string) (uint, error) {
-	file, err := os.Open(path)
+	file, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return 0, fmt.Errorf("failed to open file %s: %w", path, err)
 	}
