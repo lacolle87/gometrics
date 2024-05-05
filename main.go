@@ -14,13 +14,16 @@ import (
 const GoFileExtension = ".go"
 
 type Analyzer struct {
-	TotalLineCount     int
-	TotalFunctionCount int
+	LineCount          uint
+	FunctionCount      uint
+	TotalLineCount     uint
+	TotalFunctionCount uint
 }
 
 func (a *Analyzer) countLinesInFile(file *os.File) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
+		a.LineCount++
 		a.TotalLineCount++
 	}
 	if err := scanner.Err(); err != nil {
@@ -38,6 +41,7 @@ func (a *Analyzer) countFunctionsInFile(path string) error {
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch n.(type) {
 		case *ast.FuncDecl:
+			a.FunctionCount++
 			a.TotalFunctionCount++
 		}
 		return true
@@ -71,10 +75,13 @@ func (a *Analyzer) countLinesAndFunctions(path string) error {
 			return nil
 		}
 		if filepath.Ext(path) == GoFileExtension {
+			a.LineCount = 0
+			a.FunctionCount = 0
+
 			if err := a.processFile(path); err != nil {
 				return err
 			}
-			fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), a.TotalLineCount, a.TotalFunctionCount)
+			fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), a.LineCount, a.FunctionCount)
 		}
 		return nil
 	})
