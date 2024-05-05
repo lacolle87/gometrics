@@ -1,4 +1,4 @@
-package main
+package analyzer
 
 import (
 	c "goMetrics/cache"
@@ -144,7 +144,7 @@ func BenchmarkAnalyzeDirectoryParallel(b *testing.B) {
 
 	// Warm-up phase
 	for i := 0; i < 5; i++ {
-		if err = analyzer.analyzeDirectoryParallel(tempDir, cache); err != nil {
+		if err = analyzer.AnalyzeDirectoryParallel(tempDir, cache); err != nil {
 			b.Fatalf("Error during warm-up: %v", err)
 		}
 	}
@@ -152,7 +152,7 @@ func BenchmarkAnalyzeDirectoryParallel(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		start := time.Now()
-		if err = analyzer.analyzeDirectoryParallel(tempDir, cache); err != nil {
+		if err = analyzer.AnalyzeDirectoryParallel(tempDir, cache); err != nil {
 			b.Fatalf("Error during benchmark: %v", err)
 		}
 		elapsed := time.Since(start)
