@@ -30,7 +30,7 @@ func (a *Analyzer) countLinesInFile(path string) (uint, error) {
 	for scanner.Scan() {
 		lineCount++
 	}
-	if scannerErr := scanner.Err(); err != nil {
+	if scannerErr := scanner.Err(); scannerErr != nil {
 		return 0, scannerErr
 	}
 
