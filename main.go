@@ -28,11 +28,11 @@ func main() {
 	}
 
 	analyzer := &a.Analyzer{}
-	cache := c.NewParsedFileCache()
+	analyzer.Cache = c.NewParsedFileCache()
 
 	printer.PrintProjectInfo(path)
 
-	if err := analyzer.AnalyzeDirectoryParallel(path, cache); err != nil {
+	if err := analyzer.AnalyzeDirectoryParallel(path); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}

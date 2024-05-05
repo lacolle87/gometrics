@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -21,60 +22,16 @@ const (
 type Analyzer struct {
 	TotalLineCount     uint
 	TotalFunctionCount uint
+	Cache              *c.ParsedFileCache
 }
 
-func (a *Analyzer) countLinesInFile(path string) (uint, error) {
-	file, err := os.OpenFile(path, os.O_RDONLY, 0)
-	if err != nil {
-		return 0, fmt.Errorf("failed to open file %s: %w", path, err)
-	}
-	defer file.Close()
-
-	var lineCount uint
-	buf := make([]byte, 4096)
-
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(buf, 0)
-
-	for scanner.Scan() {
-		lineCount++
-	}
-	if scannerErr := scanner.Err(); scannerErr != nil {
-		return 0, scannerErr
-	}
-
-	return lineCount, nil
-}
-
-func (a *Analyzer) countFunctionsInFile(path string, cache *c.ParsedFileCache) (uint, error) {
-	if file, ok := cache.Get(path); ok {
-		return countFunctionsInAST(file), nil
-	}
-
+func countFunctionsInAST(path string, fileContent []byte) uint {
 	fset := token.NewFileSet()
-	src, err := os.ReadFile(path)
+	node, err := parser.ParseFile(fset, path, fileContent, parser.DeclarationErrors)
 	if err != nil {
-		return 0, err
+		fmt.Printf("Failed to parse file %s: %v", path, err)
 	}
 
-	node, err := parser.ParseFile(fset, path, src, parser.DeclarationErrors)
-	if err != nil {
-		return 0, err
-	}
-	cache.Set(path, node)
-
-	var funcCount uint
-	for _, decl := range node.Decls {
-		if fdecl, ok := decl.(*ast.FuncDecl); ok {
-			if fdecl.Name != nil {
-				funcCount++
-			}
-		}
-	}
-	return funcCount, nil
-}
-
-func countFunctionsInAST(node *ast.File) uint {
 	var funcCount uint
 	for _, decl := range node.Decls {
 		if fdecl, ok := decl.(*ast.FuncDecl); ok && fdecl.Name != nil {
@@ -84,18 +41,26 @@ func countFunctionsInAST(node *ast.File) uint {
 	return funcCount
 }
 
-func (a *Analyzer) analyzeFile(path string, cache *c.ParsedFileCache) error {
-	lineCount, err := a.countLinesInFile(path)
-	if err != nil {
-		return err
+func countLines(file []byte) uint {
+	lineCount := uint(0)
+	scanner := bufio.NewScanner(bytes.NewReader(file))
+	for scanner.Scan() {
+		lineCount++
 	}
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Error scanning file: %v\n", err)
+	}
+	return lineCount
+}
 
-	funcCount, err := a.countFunctionsInFile(path, cache)
-	if err != nil {
-		return err
-	}
+func (a *Analyzer) analyzeFile(path string) error {
+	fileContent, _ := a.Cache.Get(path)
+
+	lineCount := countLines(fileContent)
+	funcCount := countFunctionsInAST(path, fileContent)
 
 	printer.PrintFileAnalysis(path, lineCount, funcCount)
+
 	a.updateTotals(lineCount, funcCount)
 
 	return nil
@@ -105,8 +70,12 @@ func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
 	a.TotalLineCount += lineCount
 	a.TotalFunctionCount += funcCount
 }
+func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
+	err := a.preloadCache(dirPath)
+	if err != nil {
+		return err
+	}
 
-func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileCache) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
 	fileChan := make(chan string, workerPoolSize)
@@ -116,8 +85,8 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 		go func() {
 			defer wg.Done()
 			for filePath := range fileChan {
-				if err := a.analyzeFile(filePath, cache); err != nil {
-					errChan <- err
+				if AnalyzeErr := a.analyzeFile(filePath); AnalyzeErr != nil {
+					errChan <- AnalyzeErr
 					return
 				}
 			}
@@ -126,14 +95,14 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 
 	goFileFound := false
 
-	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) == ".go" {
+		if filepath.Ext(path) == goFileExtension {
 			goFileFound = true
 			fileChan <- path
 		}
@@ -159,4 +128,25 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 	}
 
 	return nil
+}
+
+func (a *Analyzer) preloadCache(dirPath string) error {
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) == goFileExtension {
+			src, ReadFileErr := os.ReadFile(path)
+			if ReadFileErr != nil {
+				return fmt.Errorf("failed to read file %s: %w", path, ReadFileErr)
+			}
+			a.Cache.Set(path, src)
+		}
+		return nil
+	})
+
+	return err
 }
