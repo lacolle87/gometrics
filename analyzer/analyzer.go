@@ -71,7 +71,7 @@ func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
 	a.TotalFunctionCount += funcCount
 }
 func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
-	err := a.preloadCache(dirPath)
+	filePaths, err := a.preloadCache(dirPath)
 	if err != nil {
 		return err
 	}
@@ -93,31 +93,11 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
 		}()
 	}
 
-	goFileFound := false
-
-	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) == goFileExtension {
-			goFileFound = true
-			fileChan <- path
-		}
-		return nil
-	})
-
-	if err != nil {
-		return err
+	for _, filePath := range filePaths {
+		fileChan <- filePath
 	}
-
-	if !goFileFound {
-		return fmt.Errorf("no go files found in the given directory")
-	}
-
 	close(fileChan)
+
 	wg.Wait()
 	close(errChan)
 
@@ -130,7 +110,9 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
 	return nil
 }
 
-func (a *Analyzer) preloadCache(dirPath string) error {
+func (a *Analyzer) preloadCache(dirPath string) ([]string, error) {
+	var filePaths []string
+	goFileFound := false
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -139,14 +121,20 @@ func (a *Analyzer) preloadCache(dirPath string) error {
 			return nil
 		}
 		if filepath.Ext(path) == goFileExtension {
+			goFileFound = true
 			src, ReadFileErr := os.ReadFile(path)
 			if ReadFileErr != nil {
 				return fmt.Errorf("failed to read file %s: %w", path, ReadFileErr)
 			}
 			a.Cache.Set(path, src)
+			filePaths = append(filePaths, path)
 		}
+
 		return nil
 	})
+	if !goFileFound {
+		return nil, fmt.Errorf("no go files found in the given directory")
+	}
 
-	return err
+	return filePaths, err
 }

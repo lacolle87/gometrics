@@ -28,7 +28,7 @@ func PrintProjectInfo(path string) {
 
 func PrintAnalysisResults(elapsed time.Duration, tlc uint, tfc uint) {
 	fmt.Printf("-------------\n")
-	fmt.Printf("Total lines: %d; Total functions: %d\n", tlc, tfc)
+	fmt.Printf("Total lines: %d; Total Functions: %d\n", tlc, tfc)
 	if elapsed > 0 {
 		fmt.Printf("Time taken: %s\n", elapsed)
 	}
