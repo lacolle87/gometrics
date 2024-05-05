@@ -125,8 +125,8 @@ func mockFileSystemPath(mfs *MockFileSystem) (string, error) {
 }
 
 func BenchmarkAnalyzeDirectoryParallel(b *testing.B) {
-	cache := c.NewParsedFileCache()
 	analyzer := &Analyzer{}
+	analyzer.Cache = c.NewParsedFileCache()
 
 	mfs := &MockFileSystem{
 		files: map[string]string{
@@ -142,17 +142,10 @@ func BenchmarkAnalyzeDirectoryParallel(b *testing.B) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Warm-up phase
-	for i := 0; i < 5; i++ {
-		if err = analyzer.AnalyzeDirectoryParallel(tempDir, cache); err != nil {
-			b.Fatalf("Error during warm-up: %v", err)
-		}
-	}
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		start := time.Now()
-		if err = analyzer.AnalyzeDirectoryParallel(tempDir, cache); err != nil {
+		if err = analyzer.AnalyzeDirectoryParallel(tempDir); err != nil {
 			b.Fatalf("Error during benchmark: %v", err)
 		}
 		elapsed := time.Since(start)
