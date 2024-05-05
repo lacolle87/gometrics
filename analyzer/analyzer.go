@@ -109,19 +109,22 @@ func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
 func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileCache) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
-	fileChan := make(chan []string, workerPoolSize)
+	fileChan := make(chan string, workerPoolSize)
 
 	for i := 0; i < workerPoolSize; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for files := range fileChan {
-				if err := a.analyzeFile(files[0], cache); err != nil {
+			for filePath := range fileChan {
+				if err := a.analyzeFile(filePath, cache); err != nil {
 					errChan <- err
+					return
 				}
 			}
 		}()
 	}
+
+	goFileFound := false
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -130,13 +133,19 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) == goFileExtension {
-			fileChan <- []string{path}
+		if filepath.Ext(path) == ".go" {
+			goFileFound = true
+			fileChan <- path
 		}
 		return nil
 	})
+
 	if err != nil {
 		return err
+	}
+
+	if !goFileFound {
+		return fmt.Errorf("no go files found in the given directory")
 	}
 
 	close(fileChan)
