@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-const goFileExtension = ".go"
+const (
+	goFileExtension = ".go"
+	WorkerPoolSize  = 4
+)
 
 type Analyzer struct {
 	TotalLineCount     uint
@@ -95,6 +98,19 @@ func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
 func (a *Analyzer) analyzeDirectoryParallel(dirPath string, cache *c.ParsedFileCache) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
+	fileChan := make(chan []string, WorkerPoolSize)
+
+	for i := 0; i < WorkerPoolSize; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for files := range fileChan {
+				if err := a.processBatch(files, cache); err != nil {
+					errChan <- err
+				}
+			}
+		}()
+	}
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -104,13 +120,7 @@ func (a *Analyzer) analyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 			return nil
 		}
 		if filepath.Ext(path) == goFileExtension {
-			wg.Add(1)
-			go func(path string) {
-				defer wg.Done()
-				if err = a.analyzeFile(path, cache); err != nil {
-					errChan <- err
-				}
-			}(path)
+			fileChan <- []string{path}
 		}
 		return nil
 	})
@@ -118,6 +128,7 @@ func (a *Analyzer) analyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 		return err
 	}
 
+	close(fileChan)
 	wg.Wait()
 	close(errChan)
 
@@ -127,6 +138,15 @@ func (a *Analyzer) analyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 		}
 	}
 
+	return nil
+}
+
+func (a *Analyzer) processBatch(files []string, cache *c.ParsedFileCache) error {
+	for _, file := range files {
+		if err := a.analyzeFile(file, cache); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
