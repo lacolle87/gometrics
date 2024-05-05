@@ -1,21 +1,31 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	a "goMetrics/analyzer"
 	c "goMetrics/cache"
 	"goMetrics/printer"
-	"os"
 	"time"
 )
 
 func main() {
-	start := time.Now()
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <path>")
+	timed := flag.Bool("t", false, "Measure execution time")
+	flag.Parse()
+
+	args := flag.Args()
+
+	if len(args) == 0 {
+		fmt.Println("Usage: go run main.go [-t] <path>")
 		return
 	}
-	path := os.Args[1]
+
+	path := args[0]
+
+	if *timed && len(args) != 1 {
+		fmt.Println("Usage: go run main.go -t <path>")
+		return
+	}
 
 	analyzer := &a.Analyzer{}
 	cache := c.NewParsedFileCache()
@@ -27,7 +37,9 @@ func main() {
 		return
 	}
 
-	elapsed := time.Since(start)
-
+	var elapsed time.Duration
+	if *timed {
+		elapsed = time.Since(time.Now())
+	}
 	printer.PrintAnalysisResults(elapsed, analyzer.TotalLineCount, analyzer.TotalFunctionCount)
 }

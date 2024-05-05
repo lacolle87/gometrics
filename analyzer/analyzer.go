@@ -106,15 +106,6 @@ func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
 	a.TotalFunctionCount += funcCount
 }
 
-func (a *Analyzer) processBatch(files []string, cache *c.ParsedFileCache) error {
-	for _, file := range files {
-		if err := a.analyzeFile(file, cache); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileCache) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
@@ -125,7 +116,7 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string, cache *c.ParsedFileC
 		go func() {
 			defer wg.Done()
 			for files := range fileChan {
-				if err := a.processBatch(files, cache); err != nil {
+				if err := a.analyzeFile(files[0], cache); err != nil {
 					errChan <- err
 				}
 			}

@@ -28,7 +28,9 @@ func PrintProjectInfo(path string) {
 
 func PrintAnalysisResults(elapsed time.Duration, tlc uint, tfc uint) {
 	fmt.Printf("-------------\n")
-	fmt.Printf("Total lines in.go files: %d\n", tlc)
-	fmt.Printf("Total functions in.go files: %d\n", tfc)
-	fmt.Printf("Time taken: %s\n", elapsed)
+	fmt.Printf("Total lines in .go files: %d\n", tlc)
+	fmt.Printf("Total functions in .go files: %d\n", tfc)
+	if elapsed > 0 {
+		fmt.Printf("Time taken: %s\n", elapsed)
+	}
 }
