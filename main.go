@@ -11,77 +11,82 @@ import (
 	"time"
 )
 
-const GoFileExtension = ".go"
+const goFileExtension = ".go"
 
 type Analyzer struct {
-	LineCount          uint
-	FunctionCount      uint
 	TotalLineCount     uint
 	TotalFunctionCount uint
 }
 
-func (a *Analyzer) countLinesInFile(file *os.File) error {
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		a.LineCount++
-		a.TotalLineCount++
-	}
-	if err := scanner.Err(); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (a *Analyzer) countFunctionsInFile(path string) error {
-	fset := token.NewFileSet()
-	node, err := parser.ParseFile(fset, path, nil, 0)
-	if err != nil {
-		return err
-	}
-	ast.Inspect(node, func(n ast.Node) bool {
-		switch n.(type) {
-		case *ast.FuncDecl:
-			a.FunctionCount++
-			a.TotalFunctionCount++
-		}
-		return true
-	})
-	return nil
-}
-
-func (a *Analyzer) processFile(path string) error {
+func (a *Analyzer) countLinesInFile(path string) (uint, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("failed to open file %s: %w", path, err)
+		return 0, fmt.Errorf("failed to open file %s: %w", path, err)
 	}
 	defer file.Close()
 
-	if err := a.countLinesInFile(file); err != nil {
+	var lineCount uint
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		lineCount++
+	}
+	if scannerErr := scanner.Err(); err != nil {
+		return 0, scannerErr
+	}
+
+	return lineCount, nil
+}
+
+func (a *Analyzer) countFunctionsInFile(path string) (uint, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		return 0, err
+	}
+
+	var funcCount uint
+	ast.Inspect(node, func(n ast.Node) bool {
+		_, ok := n.(*ast.FuncDecl)
+		if ok {
+			funcCount++
+		}
+		return true
+	})
+
+	return funcCount, nil
+}
+
+func (a *Analyzer) analyzeFile(path string) error {
+	lineCount, err := a.countLinesInFile(path)
+	if err != nil {
 		return err
 	}
-	if err := a.countFunctionsInFile(path); err != nil {
+
+	funcCount, err := a.countFunctionsInFile(path)
+	if err != nil {
 		return err
 	}
+
+	fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), lineCount, funcCount)
+
+	a.TotalLineCount += lineCount
+	a.TotalFunctionCount += funcCount
 
 	return nil
 }
 
-func (a *Analyzer) countLinesAndFunctions(path string) error {
-	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+func (a *Analyzer) analyzeDirectory(dirPath string) error {
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
 			return nil
 		}
-		if filepath.Ext(path) == GoFileExtension {
-			a.LineCount = 0
-			a.FunctionCount = 0
-
-			if err := a.processFile(path); err != nil {
-				return err
+		if filepath.Ext(path) == goFileExtension {
+			if analyzeErr := a.analyzeFile(path); err != nil {
+				return analyzeErr
 			}
-			fmt.Printf("Lines in %s: %d; Functions: %d\n", filepath.Base(path), a.LineCount, a.FunctionCount)
 		}
 		return nil
 	})
@@ -122,7 +127,7 @@ func main() {
 
 	analyzer.printProjectInfo(path)
 
-	if err := analyzer.countLinesAndFunctions(path); err != nil {
+	if err := analyzer.analyzeDirectory(path); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
