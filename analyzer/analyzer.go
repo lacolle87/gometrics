@@ -71,7 +71,7 @@ func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
 	a.TotalFunctionCount += funcCount
 }
 func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
-	filePaths, err := a.preloadCache(dirPath)
+	filePaths, err := a.preload(dirPath)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
 	return nil
 }
 
-func (a *Analyzer) preloadCache(dirPath string) ([]string, error) {
+func (a *Analyzer) preload(dirPath string) ([]string, error) {
 	var filePaths []string
 	goFileFound := false
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {

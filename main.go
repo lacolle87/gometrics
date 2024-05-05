@@ -5,13 +5,20 @@ import (
 	"fmt"
 	a "goMetrics/analyzer"
 	c "goMetrics/cache"
+	"goMetrics/help"
 	"goMetrics/printer"
 	"time"
 )
 
 func main() {
 	timed := flag.Bool("t", false, "Measure execution time")
+	flagHelp := flag.Bool("help", false, "Show help message")
 	flag.Parse()
+
+	if *flagHelp {
+		help.ShowHelp()
+		return
+	}
 
 	args := flag.Args()
 
