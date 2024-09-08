@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const version = "0.3.6-b"
+const version = "0.3.7"
 
 func main() {
 	timed := flag.Bool("t", false, "Measure execution time")
@@ -32,14 +32,14 @@ func main() {
 	args := flag.Args()
 
 	if len(args) == 0 {
-		fmt.Println("Usage: go run main.go [-t] <path>")
+		fmt.Println("Usage: gometrics [-t] <path> or gometrics -help for more information")
 		return
 	}
 
 	path := args[0]
 
 	if *timed && len(args) != 1 {
-		fmt.Println("Usage: go run main.go -t <path>")
+		fmt.Println("Usage: gometrics -t <path>")
 		return
 	}
 
