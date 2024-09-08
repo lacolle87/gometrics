@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	c "goMetrics/cache"
+	c "gometrics/cache"
 	"io"
 	"io/fs"
 	"os"

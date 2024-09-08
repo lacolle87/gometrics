@@ -1,3 +1,3 @@
 module gometrics
 
-go 1.22
+go 1.23.1

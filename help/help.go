@@ -16,6 +16,5 @@ Examples:
   gometrics .    # To analyze the current directory
 
 Output:
-  The output displays the total lines and functions in each .go file within the specified directory, along with the total for the entire project.
-`)
+  The output displays the total lines and functions in each .go file within the specified directory, along with the total for the entire project.`)
 }
