@@ -10,6 +10,9 @@ GoMetrics counts the total number of lines and functions in .go files within a s
 Options:
   -t        Measure execution time
   --help    Show this help message and exit
+  -v        Show version information
+  -version
+            Show version information
 
 Examples:
   gometrics <path>
