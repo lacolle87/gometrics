@@ -3,10 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
-	a "gometrics/analyzer"
-	c "gometrics/cache"
-	"gometrics/help"
-	"gometrics/printer"
+	a "github.com/lacolle87/gometrics/analyzer"
+	c "github.com/lacolle87/gometrics/cache"
+	"github.com/lacolle87/gometrics/help"
+	"github.com/lacolle87/gometrics/printer"
 	"time"
 )
 
