@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const version = "0.3.5"
+const version = "0.3.6-b"
 
 func main() {
 	timed := flag.Bool("t", false, "Measure execution time")
