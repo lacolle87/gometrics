@@ -10,13 +10,22 @@ import (
 	"time"
 )
 
+const version = "0.3.5"
+
 func main() {
 	timed := flag.Bool("t", false, "Measure execution time")
 	flagHelp := flag.Bool("help", false, "Show help message")
+	flagVersion := flag.Bool("version", false, "Show version information") // New version flag
+	flagVerbose := flag.Bool("v", false, "Show version information")       // New short version flag
 	flag.Parse()
 
 	if *flagHelp {
 		help.ShowHelp()
+		return
+	}
+
+	if *flagVersion || *flagVerbose {
+		fmt.Printf("Version: %s\n", version)
 		return
 	}
 
