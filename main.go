@@ -37,11 +37,6 @@ func main() {
 
 	path := args[0]
 
-	if *timed && len(args) != 1 {
-		fmt.Println("Usage: gometrics -t <path>")
-		return
-	}
-
 	analyzer := &a.Analyzer{}
 	analyzer.Cache = c.NewParsedFileCache()
 
@@ -53,8 +48,5 @@ func main() {
 	}
 
 	var elapsed time.Duration
-	if *timed {
-		elapsed = time.Since(time.Now())
-	}
 	printer.PrintAnalysisResults(elapsed, analyzer.TotalLineCount, analyzer.TotalFunctionCount)
 }
