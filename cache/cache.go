@@ -6,7 +6,7 @@ import (
 
 type ParsedFileCache struct {
 	cache map[string][]byte
-	mutex sync.Mutex
+	mutex sync.RWMutex
 }
 
 func NewParsedFileCache() *ParsedFileCache {
@@ -16,8 +16,8 @@ func NewParsedFileCache() *ParsedFileCache {
 }
 
 func (p *ParsedFileCache) Get(path string) ([]byte, bool) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
 	file, ok := p.cache[path]
 	return file, ok
 }
