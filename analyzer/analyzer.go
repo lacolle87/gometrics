@@ -30,14 +30,17 @@ func countFunctionsInAST(path string, fileContent []byte) uint {
 	node, err := parser.ParseFile(fset, path, fileContent, parser.DeclarationErrors)
 	if err != nil {
 		fmt.Printf("Failed to parse file %s: %v", path, err)
+		return 0
 	}
 
 	var funcCount uint
-	for _, decl := range node.Decls {
-		if fdecl, ok := decl.(*ast.FuncDecl); ok && fdecl.Name != nil {
+	ast.Inspect(node, func(n ast.Node) bool {
+		if fdecl, ok := n.(*ast.FuncDecl); ok && fdecl.Name != nil {
 			funcCount++
 		}
-	}
+		return true
+	})
+
 	return funcCount
 }
 
@@ -45,12 +48,18 @@ func countLines(file []byte) uint {
 	lineCount := uint(0)
 	scanner := bufio.NewScanner(bytes.NewReader(file))
 	for scanner.Scan() {
-		lineCount++
+		if line := scanner.Text(); len(line) > 0 && !isComment(line) {
+			lineCount++
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Printf("Error scanning file: %v\n", err)
 	}
 	return lineCount
+}
+
+func isComment(line string) bool {
+	return len(line) > 0 && line[0] == '/' // Simplistic check for comments
 }
 
 func (a *Analyzer) analyzeFile(path string) error {
@@ -60,7 +69,6 @@ func (a *Analyzer) analyzeFile(path string) error {
 	funcCount := countFunctionsInAST(path, fileContent)
 
 	printer.PrintFileAnalysis(path, lineCount, funcCount)
-
 	a.updateTotals(lineCount, funcCount)
 
 	return nil
@@ -70,6 +78,7 @@ func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
 	a.TotalLineCount += lineCount
 	a.TotalFunctionCount += funcCount
 }
+
 func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
 	filePaths, err := a.preload(dirPath)
 	if err != nil {
@@ -87,7 +96,6 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
 			for filePath := range fileChan {
 				if AnalyzeErr := a.analyzeFile(filePath); AnalyzeErr != nil {
 					errChan <- AnalyzeErr
-					return
 				}
 			}
 		}()
