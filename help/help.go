@@ -8,11 +8,8 @@ func ShowHelp() {
 GoMetrics counts the total number of lines and functions in .go files within a specified directory.
 
 Options:
-  -t        Measure execution time
-  --help    Show this help message and exit
+  -help    Show this help message and exit
   -v        Show version information
-  -version
-            Show version information
 
 Examples:
   gometrics <path>
