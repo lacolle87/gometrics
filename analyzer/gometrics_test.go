@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	c "gometrics/cache"
+	c "github.com/lacolle87/gometrics/cache"
 	"io"
 	"io/fs"
 	"os"
@@ -124,6 +124,22 @@ func mockFileSystemPath(mfs *MockFileSystem) (string, error) {
 	return tempDir, nil
 }
 
+func mockFileSystem(files map[string]string) (string, error) {
+	tempDir, err := os.MkdirTemp("", "preload_benchmark")
+	if err != nil {
+		return "", err
+	}
+
+	for name, content := range files {
+		err = os.WriteFile(filepath.Join(tempDir, name), []byte(content), 0644)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return tempDir, nil
+}
+
 func BenchmarkAnalyzeDirectoryParallel(b *testing.B) {
 	analyzer := &Analyzer{}
 	analyzer.Cache = c.NewParsedFileCache()
@@ -147,6 +163,35 @@ func BenchmarkAnalyzeDirectoryParallel(b *testing.B) {
 		start := time.Now()
 		if err = analyzer.AnalyzeDirectoryParallel(tempDir); err != nil {
 			b.Fatalf("Error during benchmark: %v", err)
+		}
+		elapsed := time.Since(start)
+		b.Logf("Iteration %d: Time taken: %s", i, elapsed)
+	}
+}
+
+func BenchmarkPreload(b *testing.B) {
+	analyzer := &Analyzer{
+		Cache: c.NewParsedFileCache(),
+	}
+
+	mockFiles := map[string]string{
+		"file1.go": "package main\n\nfunc main() {\n\t// Hello, world!\n}",
+		"file2.go": "package main\n\nfunc add(a, b int) int {\n\treturn a + b\n}",
+		"file3.go": "package main\n\nfunc subtract(a, b int) int {\n\treturn a - b\n}",
+	}
+
+	tempDir, err := mockFileSystem(mockFiles)
+	if err != nil {
+		b.Fatalf("Failed to create temporary directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		start := time.Now()
+		_, err := analyzer.preload(tempDir)
+		if err != nil {
+			b.Fatalf("Error during preload: %v", err)
 		}
 		elapsed := time.Since(start)
 		b.Logf("Iteration %d: Time taken: %s", i, elapsed)

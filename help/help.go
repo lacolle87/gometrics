@@ -3,7 +3,7 @@ package help
 import "fmt"
 
 func ShowHelp() {
-	fmt.Println(`Usage: gometrics [-t] <path>
+	fmt.Println(`Usage: gometrics <path>
 
 GoMetrics counts the total number of lines and functions in .go files within a specified directory.
 

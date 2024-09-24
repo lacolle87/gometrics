@@ -9,9 +9,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -20,8 +22,8 @@ const (
 )
 
 type Analyzer struct {
-	TotalLineCount     uint
-	TotalFunctionCount uint
+	TotalLineCount     uint64
+	TotalFunctionCount uint64
 	Cache              *c.ParsedFileCache
 }
 
@@ -59,7 +61,7 @@ func countLines(file []byte) uint {
 }
 
 func isComment(line string) bool {
-	return len(line) > 0 && line[0] == '/' // Simplistic check for comments
+	return len(line) > 0 && line[0] == '/'
 }
 
 func (a *Analyzer) analyzeFile(path string) error {
@@ -69,14 +71,11 @@ func (a *Analyzer) analyzeFile(path string) error {
 	funcCount := countFunctionsInAST(path, fileContent)
 
 	printer.PrintFileAnalysis(path, lineCount, funcCount)
-	a.updateTotals(lineCount, funcCount)
+
+	atomic.AddUint64(&a.TotalLineCount, uint64(lineCount))
+	atomic.AddUint64(&a.TotalFunctionCount, uint64(funcCount))
 
 	return nil
-}
-
-func (a *Analyzer) updateTotals(lineCount uint, funcCount uint) {
-	a.TotalLineCount += lineCount
-	a.TotalFunctionCount += funcCount
 }
 
 func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
@@ -121,28 +120,57 @@ func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
 func (a *Analyzer) preload(dirPath string) ([]string, error) {
 	var filePaths []string
 	goFileFound := false
-	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if filepath.Ext(path) == goFileExtension {
-			goFileFound = true
-			src, ReadFileErr := os.ReadFile(path)
-			if ReadFileErr != nil {
-				return fmt.Errorf("failed to read file %s: %w", path, ReadFileErr)
-			}
-			a.Cache.Set(path, src)
-			filePaths = append(filePaths, path)
-		}
+	fileChan := make(chan string, 100)
+	errChan := make(chan error, 1)
 
-		return nil
-	})
-	if !goFileFound {
-		return nil, fmt.Errorf("no go files found in the given directory")
+	go func() {
+		defer close(fileChan)
+		err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			if filepath.Ext(path) == goFileExtension {
+				goFileFound = true
+				fileChan <- path
+			}
+			return nil
+		})
+		if err != nil {
+			errChan <- err
+		}
+	}()
+
+	var wg sync.WaitGroup
+	for i := 0; i < workerPoolSize; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range fileChan {
+				src, err := os.ReadFile(path)
+				if err != nil {
+					errChan <- fmt.Errorf("failed to read file %s: %w", path, err)
+					continue
+				}
+				a.Cache.Set(path, src)
+				filePaths = append(filePaths, path)
+			}
+		}()
 	}
 
-	return filePaths, err
+	wg.Wait()
+
+	select {
+	case err := <-errChan:
+		return nil, err
+	default:
+	}
+
+	if !goFileFound {
+		return nil, fmt.Errorf("no Go files found in the given directory")
+	}
+
+	return filePaths, nil
 }

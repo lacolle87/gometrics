@@ -31,7 +31,7 @@ func main() {
 	args := flag.Args()
 
 	if len(args) == 0 {
-		fmt.Println("Usage: gometrics [-t] <path> or gometrics -help for more information")
+		fmt.Println("Usage: gometrics <path> or gometrics -help for more information")
 		return
 	}
 
@@ -42,11 +42,13 @@ func main() {
 
 	printer.PrintProjectInfo(path)
 
+	startTime := time.Now()
+
 	if err := analyzer.AnalyzeDirectoryParallel(path); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
-	var elapsed time.Duration
+	elapsed := time.Since(startTime)
 	printer.PrintAnalysisResults(elapsed, analyzer.TotalLineCount, analyzer.TotalFunctionCount)
 }
