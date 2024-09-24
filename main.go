@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const version = "0.3.10"
+const version = "0.4.0"
 
 func main() {
 	flagHelp := flag.Bool("help", false, "Show help message")
@@ -44,7 +44,7 @@ func main() {
 
 	startTime := time.Now()
 
-	if err := analyzer.AnalyzeDirectoryParallel(path); err != nil {
+	if err := analyzer.AnalyzeDirectory(path); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}

@@ -18,7 +18,7 @@ import (
 
 const (
 	goFileExtension = ".go"
-	workerPoolSize  = 8
+	workerPoolSize  = 16
 )
 
 type Analyzer struct {
@@ -31,7 +31,7 @@ func countFunctionsInAST(path string, fileContent []byte) uint {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, fileContent, parser.DeclarationErrors)
 	if err != nil {
-		fmt.Printf("Failed to parse file %s: %v", path, err)
+		fmt.Printf("Failed to parse file %s: %v\n", path, err)
 		return 0
 	}
 
@@ -78,84 +78,21 @@ func (a *Analyzer) analyzeFile(path string) error {
 	return nil
 }
 
-func (a *Analyzer) AnalyzeDirectoryParallel(dirPath string) error {
-	filePaths, err := a.preload(dirPath)
-	if err != nil {
-		return err
-	}
+func (a *Analyzer) AnalyzeDirectory(dirPath string) error {
+	fileChan := make(chan string, 100)
+	errChan := make(chan error, 1)
+
+	go a.preload(dirPath, fileChan, errChan)
 
 	var wg sync.WaitGroup
-	errChan := make(chan error, 1)
-	fileChan := make(chan string, workerPoolSize)
-
 	for i := 0; i < workerPoolSize; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for filePath := range fileChan {
-				if AnalyzeErr := a.analyzeFile(filePath); AnalyzeErr != nil {
-					errChan <- AnalyzeErr
+				if analyzeErr := a.analyzeFile(filePath); analyzeErr != nil {
+					errChan <- analyzeErr
 				}
-			}
-		}()
-	}
-
-	for _, filePath := range filePaths {
-		fileChan <- filePath
-	}
-	close(fileChan)
-
-	wg.Wait()
-	close(errChan)
-
-	for err = range errChan {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (a *Analyzer) preload(dirPath string) ([]string, error) {
-	var filePaths []string
-	goFileFound := false
-	fileChan := make(chan string, 100)
-	errChan := make(chan error, 1)
-
-	go func() {
-		defer close(fileChan)
-		err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			if filepath.Ext(path) == goFileExtension {
-				goFileFound = true
-				fileChan <- path
-			}
-			return nil
-		})
-		if err != nil {
-			errChan <- err
-		}
-	}()
-
-	var wg sync.WaitGroup
-	for i := 0; i < workerPoolSize; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for path := range fileChan {
-				src, err := os.ReadFile(path)
-				if err != nil {
-					errChan <- fmt.Errorf("failed to read file %s: %w", path, err)
-					continue
-				}
-				a.Cache.Set(path, src)
-				filePaths = append(filePaths, path)
 			}
 		}()
 	}
@@ -164,13 +101,36 @@ func (a *Analyzer) preload(dirPath string) ([]string, error) {
 
 	select {
 	case err := <-errChan:
-		return nil, err
+		return err
 	default:
 	}
 
-	if !goFileFound {
-		return nil, fmt.Errorf("no Go files found in the given directory")
-	}
+	return nil
+}
 
-	return filePaths, nil
+func (a *Analyzer) preload(dirPath string, fileChan chan<- string, errChan chan<- error) {
+	defer close(fileChan)
+
+	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Ext(path) != goFileExtension {
+			return nil
+		}
+
+		src, err := os.ReadFile(path)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to read file %s: %w", path, err)
+			return nil
+		}
+
+		a.Cache.Set(path, src)
+		fileChan <- path
+
+		return nil
+	})
+	if err != nil {
+		errChan <- err
+	}
 }
