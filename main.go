@@ -42,13 +42,14 @@ func main() {
 
 	printer.PrintProjectInfo(path)
 
-	startTime := time.Now()
+	//startTime := time.Now()
 
 	if err := analyzer.AnalyzeDirectory(path); err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
-	elapsed := time.Since(startTime)
+	var elapsed time.Duration
+	//elapsed = time.Since(startTime)
 	printer.PrintAnalysisResults(elapsed, analyzer.TotalLineCount, analyzer.TotalFunctionCount)
 }
