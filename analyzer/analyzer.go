@@ -111,26 +111,41 @@ func (a *Analyzer) AnalyzeDirectory(dirPath string) error {
 func (a *Analyzer) preload(dirPath string, fileChan chan<- string, errChan chan<- error) {
 	defer close(fileChan)
 
-	err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() || filepath.Ext(path) != goFileExtension {
+	var wg sync.WaitGroup
+	filePaths := make(chan string, 100)
+
+	go func() {
+		defer close(filePaths)
+		err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || filepath.Ext(path) != goFileExtension {
+				return nil
+			}
+			filePaths <- path
 			return nil
-		}
-
-		src, err := os.ReadFile(path)
+		})
 		if err != nil {
-			errChan <- fmt.Errorf("failed to read file %s: %w", path, err)
-			return nil
+			return
 		}
+	}()
 
-		a.Cache.Set(path, src)
-		fileChan <- path
-
-		return nil
-	})
-	if err != nil {
-		errChan <- err
+	for i := 0; i < workerPoolSize; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range filePaths {
+				src, err := os.ReadFile(path)
+				if err != nil {
+					errChan <- fmt.Errorf("failed to read file %s: %w", path, err)
+					continue
+				}
+				a.Cache.Set(path, src)
+				fileChan <- path
+			}
+		}()
 	}
+
+	wg.Wait()
 }
