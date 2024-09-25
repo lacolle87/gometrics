@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
-const version = "0.4.2"
+const version = "0.4.3"
 
 func main() {
+	timed := flag.Bool("t", false, "Measure execution time")
 	flagHelp := flag.Bool("help", false, "Show help message")
 	flagVersion := flag.Bool("version", false, "Show version information")
 	flagVerbose := flag.Bool("v", false, "Show version information")
@@ -37,12 +38,17 @@ func main() {
 
 	path := args[0]
 
+	if *timed && len(args) != 1 {
+		fmt.Println("Usage: gometrics -t <path>")
+		return
+	}
+
 	analyzer := &a.Analyzer{}
 	analyzer.Cache = c.NewParsedFileCache()
 
 	printer.PrintProjectInfo(path)
 
-	//startTime := time.Now()
+	startTime := time.Now()
 
 	if err := analyzer.AnalyzeDirectory(path); err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -50,6 +56,8 @@ func main() {
 	}
 
 	var elapsed time.Duration
-	//elapsed = time.Since(startTime)
+	if *timed {
+		elapsed = time.Since(startTime)
+	}
 	printer.PrintAnalysisResults(elapsed, analyzer.TotalLineCount, analyzer.TotalFunctionCount)
 }

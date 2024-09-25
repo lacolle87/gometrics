@@ -161,7 +161,7 @@ func BenchmarkAnalyzeDirectoryParallel(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		start := time.Now()
-		if err = analyzer.AnalyzeDirectoryParallel(tempDir); err != nil {
+		if err = analyzer.AnalyzeDirectory(tempDir); err != nil {
 			b.Fatalf("Error during benchmark: %v", err)
 		}
 		elapsed := time.Since(start)
@@ -188,12 +188,29 @@ func BenchmarkPreload(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		start := time.Now()
-		_, err := analyzer.preload(tempDir)
-		if err != nil {
-			b.Fatalf("Error during preload: %v", err)
+		fileChan := make(chan string)
+		errChan := make(chan error, 1)
+
+		go func() {
+			analyzer.preload(tempDir, fileChan, errChan)
+			close(errChan)
+		}()
+
+		done := false
+		for !done {
+			select {
+			case path, ok := <-fileChan:
+				if !ok {
+					fileChan = nil
+				} else {
+					b.Logf("Processed file: %s", path)
+				}
+			case err := <-errChan:
+				if err != nil {
+					b.Fatalf("Error during preload: %v", err)
+				}
+				done = true
+			}
 		}
-		elapsed := time.Since(start)
-		b.Logf("Iteration %d: Time taken: %s", i, elapsed)
 	}
 }
