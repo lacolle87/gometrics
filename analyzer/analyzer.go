@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/karrick/godirwalk"
 	c "github.com/lacolle87/gometrics/cache"
 	"github.com/lacolle87/gometrics/printer"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -114,21 +114,23 @@ func (a *Analyzer) preload(dirPath string, fileChan chan<- string, errChan chan<
 	var wg sync.WaitGroup
 	filePaths := make(chan string, 100)
 
+	wg.Add(1)
 	go func() {
-		defer close(filePaths)
-		err := filepath.WalkDir(dirPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() || filepath.Ext(path) != goFileExtension {
+		defer wg.Done()
+		err := godirwalk.Walk(dirPath, &godirwalk.Options{
+			Callback: func(fullPath string, de *godirwalk.Dirent) error {
+				if de.IsDir() || filepath.Ext(fullPath) != goFileExtension {
+					return nil
+				}
+				filePaths <- fullPath
 				return nil
-			}
-			filePaths <- path
-			return nil
+			},
+			Unsorted: true,
 		})
 		if err != nil {
-			return
+			errChan <- fmt.Errorf("error walking the path %s: %w", dirPath, err)
 		}
+		close(filePaths)
 	}()
 
 	for i := 0; i < workerPoolSize; i++ {
@@ -146,6 +148,5 @@ func (a *Analyzer) preload(dirPath string, fileChan chan<- string, errChan chan<
 			}
 		}()
 	}
-
 	wg.Wait()
 }
