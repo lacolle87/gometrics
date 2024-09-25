@@ -5,25 +5,21 @@ import (
 )
 
 type ParsedFileCache struct {
-	cache map[string][]byte
-	mutex sync.RWMutex
+	cache sync.Map
 }
 
 func NewParsedFileCache() *ParsedFileCache {
-	return &ParsedFileCache{
-		cache: make(map[string][]byte),
-	}
+	return &ParsedFileCache{}
 }
 
 func (p *ParsedFileCache) Get(path string) ([]byte, bool) {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	file, ok := p.cache[path]
-	return file, ok
+	value, ok := p.cache.Load(path)
+	if ok {
+		return value.([]byte), true
+	}
+	return nil, false
 }
 
 func (p *ParsedFileCache) Set(path string, file []byte) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	p.cache[path] = file
+	p.cache.Store(path, file)
 }
