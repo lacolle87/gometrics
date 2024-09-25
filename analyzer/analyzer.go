@@ -118,7 +118,6 @@ func (a *Analyzer) AnalyzeDirectory(dirPath string) error {
 		return err
 	default:
 	}
-
 	return nil
 }
 
