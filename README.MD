@@ -25,7 +25,7 @@ go run main.go .
 You can install GoMetrics by running the following command:
 
 ```bash
-go install github.com/lacolle87/gometrics@v0.4.5
+go install github.com/lacolle87/gometrics@v0.5.0
 ```
 
 This will install the package and make the `gometrics` executable available in your `$GOPATH/bin` directory.

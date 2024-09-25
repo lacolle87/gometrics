@@ -20,6 +20,7 @@ import (
 const (
 	goFileExtension = ".go"
 	workerPoolSize  = 16
+	fileChanBuffer  = 100
 )
 
 type Analyzer struct {
@@ -32,7 +33,6 @@ func countFunctionsInAST(path string, fileContent []byte) uint {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, path, fileContent, parser.DeclarationErrors)
 	if err != nil {
-		fmt.Printf("Failed to parse file %s: %v\n", path, err)
 		return 0
 	}
 
@@ -54,10 +54,9 @@ func countLines(file []byte) uint {
 		line, err := reader.ReadBytes('\n')
 		if err != nil {
 			if err == io.EOF {
-				break // Exit loop at EOF
+				break
 			}
-			fmt.Printf("Error reading line: %v\n", err)
-			continue
+			fmt.Printf("Error reading file: %v\n", err)
 		}
 
 		if len(line) > 0 && !isComment(string(line)) {
@@ -68,10 +67,10 @@ func countLines(file []byte) uint {
 }
 
 func isComment(line string) bool {
-	return len(line) > 0 && line[0] == '/'
+	return len(line) > 0 && (line[0] == '/' || line[0] == '#')
 }
 
-func (a *Analyzer) analyzeFile(path string) error {
+func (a *Analyzer) analyzeGoFile(path string) error {
 	fileContent, _ := a.Cache.Get(path)
 
 	if bytes.IndexByte(fileContent, 0) != -1 {
@@ -94,7 +93,7 @@ func (a *Analyzer) analyzeFile(path string) error {
 }
 
 func (a *Analyzer) AnalyzeDirectory(dirPath string) error {
-	fileChan := make(chan string, 100)
+	fileChan := make(chan string, fileChanBuffer)
 	errChan := make(chan error, 1)
 
 	go a.preload(dirPath, fileChan, errChan)
@@ -105,8 +104,8 @@ func (a *Analyzer) AnalyzeDirectory(dirPath string) error {
 		go func() {
 			defer wg.Done()
 			for filePath := range fileChan {
-				if analyzeErr := a.analyzeFile(filePath); analyzeErr != nil {
-					errChan <- analyzeErr
+				if err := a.analyzeGoFile(filePath); err != nil {
+					errChan <- err
 				}
 			}
 		}()
@@ -127,7 +126,7 @@ func (a *Analyzer) preload(dirPath string, fileChan chan<- string, errChan chan<
 	defer close(fileChan)
 
 	var wg sync.WaitGroup
-	filePaths := make(chan string, 100)
+	filePaths := make(chan string, fileChanBuffer)
 
 	wg.Add(1)
 	go func() {
@@ -153,15 +152,22 @@ func (a *Analyzer) preload(dirPath string, fileChan chan<- string, errChan chan<
 		go func() {
 			defer wg.Done()
 			for path := range filePaths {
-				src, err := os.ReadFile(path)
-				if err != nil {
-					errChan <- fmt.Errorf("failed to read file %s: %w", path, err)
-					continue
+				if err := a.readAndCacheFile(path); err != nil {
+					errChan <- err
+				} else {
+					fileChan <- path
 				}
-				a.Cache.Set(path, src)
-				fileChan <- path
 			}
 		}()
 	}
 	wg.Wait()
+}
+
+func (a *Analyzer) readAndCacheFile(path string) error {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", path, err)
+	}
+	a.Cache.Set(path, src)
+	return nil
 }
