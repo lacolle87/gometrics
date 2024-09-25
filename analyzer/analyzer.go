@@ -10,6 +10,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -48,14 +49,20 @@ func countFunctionsInAST(path string, fileContent []byte) uint {
 
 func countLines(file []byte) uint {
 	lineCount := uint(0)
-	scanner := bufio.NewScanner(bytes.NewReader(file))
-	for scanner.Scan() {
-		if line := scanner.Text(); len(line) > 0 && !isComment(line) {
+	reader := bufio.NewReader(bytes.NewReader(file))
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break // Exit loop at EOF
+			}
+			fmt.Printf("Error reading line: %v\n", err)
+			continue
+		}
+
+		if len(line) > 0 && !isComment(string(line)) {
 			lineCount++
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Printf("Error scanning file: %v\n", err)
 	}
 	return lineCount
 }
@@ -66,6 +73,14 @@ func isComment(line string) bool {
 
 func (a *Analyzer) analyzeFile(path string) error {
 	fileContent, _ := a.Cache.Get(path)
+
+	if bytes.IndexByte(fileContent, 0) != -1 {
+		return nil
+	}
+
+	if !bytes.HasPrefix(fileContent, []byte("package ")) {
+		return nil
+	}
 
 	lineCount := countLines(fileContent)
 	funcCount := countFunctionsInAST(path, fileContent)
